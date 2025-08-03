@@ -1,0 +1,22 @@
+{
+  "name": "copilot-chat-with-your-data",
+  "description": "AI-powered dashboard assistant with CopilotKit",
+  "framework": "nextjs",
+  "buildCommand": "pnpm build",
+  "installCommand": "pnpm install",
+  "devCommand": "pnpm dev",
+  "environmentVariables": {
+    "OPENAI_API_KEY": {
+      "description": "Your OpenAI API key for AI functionality",
+      "required": true,
+      "type": "secret"
+    },
+    "TAVILY_API_KEY": {
+      "description": "Your Tavily API key for web search functionality", 
+      "required": true,
+      "type": "secret"
+    }
+  },
+  "outputDirectory": ".next",
+  "nodeVersion": "18"
+} 
