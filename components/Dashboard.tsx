@@ -6,6 +6,7 @@ import { AreaChart } from "./ui/area-chart";
 import { BarChart } from "./ui/bar-chart";
 import { DonutChart } from "./ui/pie-chart";
 import { SearchResults } from "./generative-ui/SearchResults";
+import { ChartRenderer } from "./generative-ui/ChartRenderer";
 import { 
   salesData, 
   productData, 
@@ -52,7 +53,7 @@ export function Dashboard() {
   // Define render only search action
   useCopilotAction({
     name: "searchInternet",
-    available: "disabled",
+    available: "enabled",
     description: "Searches the internet for information.",
     parameters: [
       {
@@ -64,6 +65,49 @@ export function Dashboard() {
     ],
     render: ({args, status}) => {
       return <SearchResults query={args.query || 'No query provided'} status={status} />;
+    }
+  });
+
+  // Define chart creation action
+  useCopilotAction({
+    name: "createChart",
+    available: "enabled",
+    description: "Creates a chart visualization based on data analysis.",
+    parameters: [
+      {
+        name: "chartType",
+        type: "string",
+        description: "The type of chart to create (bar, line, pie, area)",
+        required: true,
+      },
+      {
+        name: "title",
+        type: "string",
+        description: "The title of the chart",
+        required: true,
+      },
+      {
+        name: "data",
+        type: "object",
+        description: "The data to visualize in the chart",
+        required: true,
+      },
+      {
+        name: "description",
+        type: "string",
+        description: "Description of what the chart shows",
+        required: false,
+      },
+    ],
+    render: ({args}) => {
+      return (
+        <ChartRenderer
+          chartType={args.chartType || 'bar'}
+          title={args.title || 'Chart'}
+          data={args.data || []}
+          description={args.description}
+        />
+      );
     }
   });
 

@@ -48,5 +48,9 @@ next-env.d.ts
 .vscode/
 .idea/
 
+# Project-specific folders
+/[docs]/
+/[gleb]ideas/
+
 # OS
 Thumbs.db
