@@ -52,6 +52,9 @@ next-env.d.ts
 /[docs]/
 /[gleb]ideas/
 
+# Security and sensitive files
+SECURITY.md
+
 # OS
 Thumbs.db
 .env
