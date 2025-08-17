@@ -7,8 +7,9 @@ import { tavily } from '@tavily/core';
 import { NextRequest } from 'next/server';
 
 const serviceAdapter = new OpenAIAdapter({});
+
 const runtime = new CopilotRuntime({
-  actions: () => {
+  actions: ({properties, url}) => {
     return [
       {
         name: "searchInternet",
@@ -22,7 +23,6 @@ const runtime = new CopilotRuntime({
           },
         ],
         handler: async ({query}: {query: string}) => {
-          // can safely reference sensitive information like environment variables
           const tvly = tavily({ apiKey: process.env.TAVILY_API_KEY });
           return await tvly.search(query, {max_results: 5});
         },
@@ -92,7 +92,6 @@ const runtime = new CopilotRuntime({
           analysisType: string;
           traceData: any;
         }) => {
-          // Analyze trace data based on type
           let analysis = {};
           
           switch (analysisType) {
@@ -108,6 +107,8 @@ const runtime = new CopilotRuntime({
             case "dependencies":
               analysis = analyzeDependencies(traceData);
               break;
+            default:
+              analysis = { error: "Unknown analysis type" };
           }
           
           return {
@@ -117,181 +118,257 @@ const runtime = new CopilotRuntime({
           };
         },
       },
-    ]
-  }
+      {
+        name: "createTimelineChart",
+        description: "Creates timeline-based charts (Gantt, Scatter) for trace analysis.",
+        parameters: [
+          {
+            name: "chartType",
+            type: "string",
+            description: "The type of timeline chart (gantt, scatter)",
+            required: true,
+          },
+          {
+            name: "title",
+            type: "string",
+            description: "The title of the chart",
+            required: true,
+          },
+          {
+            name: "dataType",
+            type: "string",
+            description: "Type of data to extract (operations, services, errors)",
+            required: true,
+          },
+          {
+            name: "serviceFilter",
+            type: "string",
+            description: "Optional service name to filter by",
+            required: false,
+          },
+        ],
+        handler: async ({chartType, title, dataType, serviceFilter}: {
+          chartType: string;
+          title: string;
+          dataType: string;
+          serviceFilter?: string;
+        }) => {
+          return {
+            chartType,
+            title,
+            dataType,
+            serviceFilter,
+            timestamp: new Date().toISOString()
+          };
+        },
+      },
+      {
+        name: "showFullPageChart",
+        description: "Shows a full-page chart view for maximum visibility.",
+        parameters: [
+          {
+            name: "chartType",
+            type: "string",
+            description: "The type of chart to display (gantt, scatter, bar, line, pie, area)",
+            required: true,
+          },
+          {
+            name: "title",
+            type: "string",
+            description: "The title of the chart",
+            required: true,
+          },
+          {
+            name: "dataType",
+            type: "string",
+            description: "Type of data to extract (operations, services, errors)",
+            required: true,
+          },
+          {
+            name: "serviceFilter",
+            type: "string",
+            description: "Optional service name to filter by",
+            required: false,
+          },
+        ],
+        handler: async ({chartType, title, dataType, serviceFilter}: {
+          chartType: string;
+          title: string;
+          dataType: string;
+          serviceFilter?: string;
+        }) => {
+          return {
+            chartType,
+            title,
+            dataType,
+            serviceFilter,
+            timestamp: new Date().toISOString()
+          };
+        },
+      }
+    ] as any;
+  },
 });
 
 // Helper functions for trace analysis
 function analyzeBottlenecks(traceData: any) {
-  const bottlenecks = [];
-  
-  if (traceData && Array.isArray(traceData)) {
-    traceData.forEach((resourceSpan: any) => {
-      if (resourceSpan.resourceSpans) {
-        resourceSpan.resourceSpans.forEach((span: any) => {
-          if (span.scopeSpans) {
-            span.scopeSpans.forEach((scopeSpan: any) => {
-              if (scopeSpan.spans) {
-                scopeSpan.spans.forEach((spanData: any) => {
-                  const duration = parseInt(spanData.endTimeUnixNano) - parseInt(spanData.startTimeUnixNano);
-                  if (duration > 1000000000) { // 1 second threshold
-                    bottlenecks.push({
-                      name: spanData.name,
-                      duration: duration / 1000000000, // Convert to seconds
-                      service: span.resource?.attributes?.find((attr: any) => attr.key === "service.name")?.value?.stringValue || "Unknown"
-                    });
-                  }
-                });
-              }
-            });
-          }
-        });
-      }
-    });
+  if (!traceData || !Array.isArray(traceData)) {
+    return { totalBottlenecks: 0, bottlenecks: [] };
   }
-  
+
+  const bottlenecks: any[] = [];
+  const threshold = 1000; // 1 second threshold
+
+  traceData.forEach((resourceSpan: any) => {
+    if (resourceSpan.resourceSpans) {
+      resourceSpan.resourceSpans.forEach((span: any) => {
+        if (span.spans) {
+          span.spans.forEach((operation: any) => {
+            const duration = operation.endTimeUnixNano - operation.startTimeUnixNano;
+            if (duration > threshold * 1000000) { // Convert to nanoseconds
+              bottlenecks.push({
+                name: operation.name || 'Unknown Operation',
+                duration: duration / 1000000, // Convert back to milliseconds
+                service: span.resource?.attributes?.['service.name'] || 'Unknown Service',
+                startTime: operation.startTimeUnixNano,
+                endTime: operation.endTimeUnixNano
+              });
+            }
+          });
+        }
+      });
+    }
+  });
+
+  // Sort by duration descending
+  bottlenecks.sort((a, b) => b.duration - a.duration);
+
   return {
-    bottlenecks: bottlenecks.sort((a, b) => b.duration - a.duration).slice(0, 10),
-    totalBottlenecks: bottlenecks.length
+    totalBottlenecks: bottlenecks.length,
+    bottlenecks: bottlenecks.slice(0, 10) // Top 10 bottlenecks
   };
 }
 
 function analyzeErrors(traceData: any) {
-  const errors = [];
-  
-  if (traceData && Array.isArray(traceData)) {
-    traceData.forEach((resourceSpan: any) => {
-      if (resourceSpan.resourceSpans) {
-        resourceSpan.resourceSpans.forEach((span: any) => {
-          if (span.scopeSpans) {
-            span.scopeSpans.forEach((scopeSpan: any) => {
-              if (scopeSpan.spans) {
-                scopeSpan.spans.forEach((spanData: any) => {
-                  if (spanData.status?.code === "STATUS_CODE_ERROR") {
-                    errors.push({
-                      name: spanData.name,
-                      service: span.resource?.attributes?.find((attr: any) => attr.key === "service.name")?.value?.stringValue || "Unknown",
-                      message: spanData.status?.message || "Unknown error"
-                    });
-                  }
-                });
-              }
-            });
-          }
-        });
-      }
-    });
+  if (!traceData || !Array.isArray(traceData)) {
+    return { totalErrors: 0, errors: [], errorByService: {} };
   }
-  
+
+  const errors: any[] = [];
+  const errorByService: Record<string, number> = {};
+
+  traceData.forEach((resourceSpan: any) => {
+    if (resourceSpan.resourceSpans) {
+      resourceSpan.resourceSpans.forEach((span: any) => {
+        if (span.spans) {
+          span.spans.forEach((operation: any) => {
+            if (operation.status?.code === 2) { // Error status
+              const serviceName = span.resource?.attributes?.['service.name'] || 'Unknown Service';
+              errors.push({
+                name: operation.name || 'Unknown Operation',
+                service: serviceName,
+                message: operation.status?.message || 'Unknown error',
+                startTime: operation.startTimeUnixNano,
+                endTime: operation.endTimeUnixNano
+              });
+              
+              errorByService[serviceName] = (errorByService[serviceName] || 0) + 1;
+            }
+          });
+        }
+      });
+    }
+  });
+
   return {
-    errors: errors,
     totalErrors: errors.length,
-    errorByService: errors.reduce((acc, error) => {
-      acc[error.service] = (acc[error.service] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
+    errors: errors.slice(0, 10), // Top 10 errors
+    errorByService
   };
 }
 
 function analyzeTimeline(traceData: any) {
-  const timeline = [];
-  
-  if (traceData && Array.isArray(traceData)) {
-    traceData.forEach((resourceSpan: any) => {
-      if (resourceSpan.resourceSpans) {
-        resourceSpan.resourceSpans.forEach((span: any) => {
-          if (span.scopeSpans) {
-            span.scopeSpans.forEach((scopeSpan: any) => {
-              if (scopeSpan.spans) {
-                scopeSpan.spans.forEach((spanData: any) => {
-                  timeline.push({
-                    name: spanData.name,
-                    startTime: parseInt(spanData.startTimeUnixNano),
-                    endTime: parseInt(spanData.endTimeUnixNano),
-                    duration: parseInt(spanData.endTimeUnixNano) - parseInt(spanData.startTimeUnixNano),
-                    service: span.resource?.attributes?.find((attr: any) => attr.key === "service.name")?.value?.stringValue || "Unknown"
-                  });
-                });
-              }
-            });
-          }
-        });
-      }
-    });
+  if (!traceData || !Array.isArray(traceData)) {
+    return { totalOperations: 0, timeline: [], timeRange: { start: 0, end: 0 } };
   }
-  
-  return {
-    timeline: timeline.sort((a, b) => a.startTime - b.startTime),
-    totalSpans: timeline.length,
-    timeRange: {
-      start: Math.min(...timeline.map(t => t.startTime)),
-      end: Math.max(...timeline.map(t => t.endTime))
+
+  const timeline: any[] = [];
+  let minTime = Infinity;
+  let maxTime = -Infinity;
+
+  traceData.forEach((resourceSpan: any) => {
+    if (resourceSpan.resourceSpans) {
+      resourceSpan.resourceSpans.forEach((span: any) => {
+        if (span.spans) {
+          span.spans.forEach((operation: any) => {
+            const startTime = operation.startTimeUnixNano;
+            const endTime = operation.endTimeUnixNano;
+            const duration = endTime - startTime;
+            
+            timeline.push({
+              name: operation.name || 'Unknown Operation',
+              service: span.resource?.attributes?.['service.name'] || 'Unknown Service',
+              startTime,
+              endTime,
+              duration: duration / 1000000, // Convert to milliseconds
+              status: operation.status?.code === 2 ? 'error' : 'success'
+            });
+            
+            minTime = Math.min(minTime, startTime);
+            maxTime = Math.max(maxTime, endTime);
+          });
+        }
+      });
     }
+  });
+
+  // Sort by start time
+  timeline.sort((a, b) => a.startTime - b.startTime);
+
+  return {
+    totalOperations: timeline.length,
+    timeline: timeline.slice(0, 50), // First 50 operations
+    timeRange: { start: minTime, end: maxTime }
   };
 }
 
 function analyzeDependencies(traceData: any) {
-  const dependencies = new Map();
-  
-  if (traceData && Array.isArray(traceData)) {
-    traceData.forEach((resourceSpan: any) => {
-      if (resourceSpan.resourceSpans) {
-        resourceSpan.resourceSpans.forEach((span: any) => {
-          const serviceName = span.resource?.attributes?.find((attr: any) => attr.key === "service.name")?.value?.stringValue || "Unknown";
-          
-          if (span.scopeSpans) {
-            span.scopeSpans.forEach((scopeSpan: any) => {
-              if (scopeSpan.spans) {
-                scopeSpan.spans.forEach((spanData: any) => {
-                  if (!dependencies.has(serviceName)) {
-                    dependencies.set(serviceName, new Set());
-                  }
-                  
-                  // Look for parent-child relationships
-                  if (spanData.parentSpanId) {
-                    // This is a child span, add dependency
-                    const parentService = findServiceBySpanId(traceData, spanData.parentSpanId);
-                    if (parentService && parentService !== serviceName) {
-                      dependencies.get(serviceName).add(parentService);
-                    }
-                  }
-                });
-              }
-            });
-          }
-        });
-      }
-    });
+  if (!traceData || !Array.isArray(traceData)) {
+    return { totalServices: 0, dependencies: [], serviceCallCount: {} };
   }
-  
-  return {
-    dependencies: Array.from(dependencies.entries()).map(([service, deps]) => ({
-      service,
-      dependencies: Array.from(deps)
-    })),
-    totalServices: dependencies.size
-  };
-}
 
-function findServiceBySpanId(traceData: any, spanId: string): string | null {
-  for (const resourceSpan of traceData) {
+  const dependencies: any[] = [];
+  const serviceCallCount: Record<string, number> = {};
+  const serviceMap = new Map();
+
+  traceData.forEach((resourceSpan: any) => {
     if (resourceSpan.resourceSpans) {
-      for (const span of resourceSpan.resourceSpans) {
-        if (span.scopeSpans) {
-          for (const scopeSpan of span.scopeSpans) {
-            if (scopeSpan.spans) {
-              for (const spanData of scopeSpan.spans) {
-                if (spanData.spanId === spanId) {
-                  return span.resource?.attributes?.find((attr: any) => attr.key === "service.name")?.value?.stringValue || "Unknown";
-                }
-              }
+      resourceSpan.resourceSpans.forEach((span: any) => {
+        const serviceName = span.resource?.attributes?.['service.name'] || 'Unknown Service';
+        serviceCallCount[serviceName] = (serviceCallCount[serviceName] || 0) + 1;
+        
+        if (span.spans) {
+          span.spans.forEach((operation: any) => {
+            // Look for parent-child relationships
+            if (operation.parentSpanId) {
+              dependencies.push({
+                from: 'Parent Operation',
+                to: operation.name || 'Unknown Operation',
+                service: serviceName,
+                type: 'parent-child'
+              });
             }
-          }
+          });
         }
-      }
+      });
     }
-  }
-  return null;
+  });
+
+  return {
+    totalServices: Object.keys(serviceCallCount).length,
+    dependencies: dependencies.slice(0, 20), // Top 20 dependencies
+    serviceCallCount
+  };
 }
 
 export const POST = async (req: NextRequest) => {

@@ -7,7 +7,7 @@ interface ScatterDataItem {
   x: number;
   y: number;
   z?: number; // Optional size/weight for bubble charts
-  [key: string]: string | number;
+  [key: string]: string | number | undefined;
 }
 
 interface ScatterChartProps {
