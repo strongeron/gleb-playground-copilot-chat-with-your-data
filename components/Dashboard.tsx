@@ -20,6 +20,11 @@ import {
   calculateAverageOrderValue,
   calculateProfitMargin
 } from "../data/dashboard-data";
+import { traceFiles } from "../data/traces-data";
+import { FileText, Activity, Database } from "lucide-react";
+import { Badge } from "./ui/badge";
+import Link from "next/link";
+import { Button } from "./ui/button";
 
 export function Dashboard() {
   // Calculate metrics
@@ -151,6 +156,55 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Trace Information */}
+      <Card className="col-span-1 md:col-span-2 lg:col-span-4">
+        <CardHeader className="pb-1 pt-3">
+          <CardTitle className="text-base font-medium flex items-center gap-2">
+            <Database className="h-5 w-5" />
+            Available Trace Files
+          </CardTitle>
+          <CardDescription className="text-xs">AI agent traces for analysis and debugging</CardDescription>
+        </CardHeader>
+        <CardContent className="p-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {traceFiles.map((trace) => (
+              <div key={trace.path} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-blue-500" />
+                    <h3 className="font-medium text-sm">{trace.name}</h3>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {trace.type}
+                  </Badge>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                  {trace.description}
+                </p>
+                <div className="flex items-center justify-between">
+                  <Badge variant="secondary" className="text-xs">
+                    {trace.size}
+                  </Badge>
+                  <Link href={`/traces?file=${trace.path}`}>
+                    <Button variant="outline" size="sm" className="text-xs">
+                      Analyze
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 text-center">
+            <Link href="/traces">
+              <Button variant="default" className="w-full">
+                <Activity className="h-4 w-4 mr-2" />
+                Go to Trace Analysis
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Charts */}
       <Card className="col-span-1 md:col-span-2 lg:col-span-4">

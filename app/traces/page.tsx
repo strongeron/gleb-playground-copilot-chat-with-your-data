@@ -13,40 +13,7 @@ import { ChartRenderer } from "../../components/generative-ui/ChartRenderer";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
 import Link from "next/link";
 import { prompt } from "../../lib/prompt";
-
-interface TraceFile {
-  name: string;
-  path: string;
-  size: string;
-  description: string;
-}
-
-const traceFiles: TraceFile[] = [
-  {
-    name: "RAG Earnings Agent",
-    path: "rag_earnings_agent.json",
-    size: "94KB",
-    description: "AI agent traces for earnings reports RAG system"
-  },
-  {
-    name: "Smol Deep Research Agent", 
-    path: "smol_deep_research_agent.json",
-    size: "246KB",
-    description: "Deep research agent with comprehensive trace data"
-  },
-  {
-    name: "Quo Tav Agent",
-    path: "quo_tav_agent.json", 
-    size: "2.4MB",
-    description: "Large-scale agent traces with Tavily integration"
-  },
-  {
-    name: "Trace Analysis",
-    path: "trace-6c410c665ee8cf1efc9d0e6256f96dd7.json",
-    size: "120KB", 
-    description: "Detailed trace analysis and debugging data"
-  }
-];
+import { traceFiles, TraceFile } from "../../data/traces-data";
 
 export default function TracesPage() {
   const [selectedFile, setSelectedFile] = useState<TraceFile>(traceFiles[0]);
@@ -55,6 +22,21 @@ export default function TracesPage() {
   const [stats, setStats] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [aiStatus, setAiStatus] = useState<'idle' | 'thinking' | 'ready'>('idle');
+
+  useEffect(() => {
+    // Check for file parameter in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const fileParam = urlParams.get('file');
+    
+    if (fileParam) {
+      const file = traceFiles.find(f => f.path === fileParam);
+      if (file) {
+        setSelectedFile(file);
+      }
+    } else {
+      loadTraceFile(selectedFile);
+    }
+  }, [selectedFile]);
 
   useEffect(() => {
     loadTraceFile(selectedFile);

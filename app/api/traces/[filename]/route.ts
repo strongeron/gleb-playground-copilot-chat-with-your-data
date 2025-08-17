@@ -8,7 +8,7 @@ export async function GET(
 ) {
   try {
     const { filename } = await params;
-    const filePath = join(process.cwd(), "[gleb]ideas", "ai-traces-assistant", "demo json files", filename);
+    const filePath = join(process.cwd(), "data", "traces", filename);
     
     const fileContent = readFileSync(filePath, "utf-8");
     const jsonData = JSON.parse(fileContent);
